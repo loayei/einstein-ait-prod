@@ -180,7 +180,7 @@ class ClaudeMiner(Miner):
 
 # This is the main function, which runs the miner.
 if __name__ == "__main__":
-    with OpenAIMiner() as miner:
+    with ClaudeMiner() as miner:
         while True:
             miner.log_status()
             time.sleep(5)
