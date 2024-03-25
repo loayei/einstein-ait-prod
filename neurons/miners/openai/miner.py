@@ -61,7 +61,7 @@ class ClaudeMiner(Miner):
 
         # Set Claude key and other args
         self.model = ChatAnthropic(
-            api_key=api_key,
+            anthropic_api_key=api_key,
             model=self.config.neuron.model_id,
             max_tokens_to_sample=self.config.neuron.max_tokens,
             temperature=self.config.neuron.temperature,
