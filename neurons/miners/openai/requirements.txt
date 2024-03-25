@@ -1,6 +1,8 @@
 openai==1.9.0
-langchain==0.1.11
+langchain==0.1.13
 python-dotenv
 langchain-openai
 langchain-community
+langchain-anthropic
+anthropic==0.21.3
 git+https://github.com/AIT-Protocol/NumPAL.git@main#egg=NumPAL
