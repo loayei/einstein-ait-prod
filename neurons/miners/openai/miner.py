@@ -103,21 +103,7 @@ class ClaudeMiner(Miner):
         }
 
     async def forward(self, synapse: CoreSynapse) -> CoreSynapse:
-        """
-        Processes the incoming synapse by performing a predefined operation on the input data.
-        This method should be replaced with actual logic relevant to the miner's purpose.
-
-        Args:
-            synapse (CoreSynapse): The synapse object containing the 'dummy_input' data.
-
-        Returns:
-            CoreSynapse: The synapse object with the 'dummy_output' field set to twice the 'dummy_input' value.
-
-        The 'forward' function is a placeholder and should be overridden with logic that is appropriate for
-        the miner's intended operation. This method demonstrates a basic transformation of input data.
-        """
         try:
-            # with get_openai_callback() as cb:
             t0 = time.time()
             bt.logging.debug(f"📧 Message received, forwarding synapse: {synapse}")
 
@@ -133,47 +119,45 @@ class ClaudeMiner(Miner):
             # Get the math question from the last message
             math_question = synapse.messages[-1]
 
-            # If NumPAL is turned on, use it to process the math question
-            if not self.config.numpal.off:
+            try:
+                # If NumPAL is turned on, use it to process the math question
+                if not self.config.numpal.off:
+                    bt.logging.debug("\033[1;32m💬 Running Math script on NumPAL\033[0m")
+                    verbose_on = not self.config.numpal.verbose.off
 
-                bt.logging.debug("\033[1;32m💬 Running Math script on NumPAL\033[0m")
-                verbose_on = not self.config.numpal.verbose.off
+                    q_r = NumPAL.from_math_prompt(self.model, verbose=verbose_on).invoke(math_question)
+                    response = chain.invoke({"role": role, "input": str(q_r)})
+                else:
+                    bt.logging.debug(f"💬 Querying Claude...")
+                    response = chain.invoke({"role": role, "input": math_question})
 
-                q_r = NumPAL.from_math_prompt(self.model, verbose=verbose_on).invoke(math_question)
+                synapse.completion = response
+                synapse_latency = time.time() - t0
 
-                response = chain.invoke({"role": role, "input": str(q_r)})
+                bt.logging.info(f'📧 \033[1;34mMessage received: {math_question}\033[0m')
+                bt.logging.info(f'📧 \033[1;34mResponse: {response}\033[0m')
 
-            # If NumPAL is turned off, use the model to process the math question
-            else:
+                if self.config.wandb.on:
+                    self.log_event(
+                        timing=synapse_latency,
+                        prompt=math_question,
+                        completion=response,
+                        system_prompt=self.system_prompt,
+                    )
 
-                bt.logging.debug(f"💬 Querying Claude...")
+                bt.logging.debug(f"✅ \033[1;32mResponse Served: \033[0m {synapse}")
+                self.step += 1
 
-                response = chain.invoke({"role": role, "input": math_question})
+            except Exception as e:
+                bt.logging.error(f"Error during processing: {e}")
+                synapse.completion = "Sorry, an error occurred while processing your request. Please try again later."
 
-            synapse.completion = response
-            synapse_latency = time.time() - t0
-
-            bt.logging.info(f'📧 \033[1;34mMessage received: {math_question}\033[0m')
-            bt.logging.info(f'📧 \033[1;34mResponse: {response}\033[0m')
-
-            if self.config.wandb.on:
-                self.log_event(
-                    timing=synapse_latency,
-                    prompt=math_question,
-                    completion=response,
-                    system_prompt=self.system_prompt,
-                    # extra_info=self.get_cost_logging(cb),
-                )
-
-            bt.logging.debug(f"✅ \033[1;32mResponse Served: \033[0m {synapse}")
-            self.step += 1
-
-            return synapse
         except Exception as e:
             bt.logging.error(f"Error in forward: {e}")
-            synapse.completion = "Error: " + str(e)
+            synapse.completion = "Sorry, an unexpected error occurred. Please try again later."
+
         finally:
-            if self.config.neuron.stop_on_forward_exception:
+            if self.config.neuron.stop_on_forward_exception and synapse.completion.startswith("Sorry"):
                 self.should_exit = True
             return synapse
 
